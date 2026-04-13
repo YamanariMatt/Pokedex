@@ -6,13 +6,7 @@ Uma Pokédex web completa com design retrô inspirado nos jogos clássicos de Ga
 
 ## 🚀 Demonstração
 
-👉 (https://yamanarimatt.github.io/Pokedex/)
-
----
-
-## 📸 Preview
-
-![Preview da Pokédex](./preview.png)
+👉 https://yamanarimatt.github.io/Pokedex/
 
 ---
 
