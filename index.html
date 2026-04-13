@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="description" content="Pokédex Retrô - Explore todos os Pokémons com design inspirado nos clássicos Game Boy"/>
+  <meta name="theme-color" content="#CC0000"/>
+  <title>Pokédex Retrô</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"/>
+  <style>
+    /* ============================================================
+       RESET & GLOBALS
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background: #0a0a0f;
+      color: #fff;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #CC0000; border: 1px solid #000; }
+
+    /* ============================================================
+       KEYFRAME ANIMATIONS
+    ============================================================ */
+    @keyframes spin      { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+    @keyframes fadeUp    { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn   { from { opacity: 0; transform: scale(.88); } to { opacity: 1; transform: scale(1); } }
+    @keyframes pulse     { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    @keyframes shimmer   { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+    @keyframes blink     { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    @keyframes scanH     { 0% { transform: translateY(-100%); } 100% { transform: translateY(100vh); } }
+
+    /* ============================================================
+       UTILITY CLASSES
+    ============================================================ */
+    .card-enter  { animation: fadeUp .32s ease forwards; }
+    .modal-enter { animation: slideIn .22s ease forwards; }
+    .pimg:hover  { animation: pulse .5s ease infinite; }
+
+    /* Retro push button */
+    .btn {
+      font-family: 'Press Start 2P', monospace;
+      cursor: pointer;
+      border: 2px solid #000;
+      box-shadow: 3px 3px 0 #000;
+      transition: transform .08s, box-shadow .08s;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .btn:hover  { transform: translate(1px, 1px);  box-shadow: 2px 2px 0 #000; }
+    .btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 #000; }
+
+    /* Card hover lift */
+    .pcard {
+      cursor: pointer;
+      transition: transform .18s, box-shadow .18s;
+      border: 3px solid transparent;
+      position: relative;
+    }
+    .pcard:hover { transform: translate(-2px, -5px); }
+
+    /* Skeleton shimmer */
+    .skeleton {
+      background: linear-gradient(90deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%);
+      background-size: 400px 100%;
+      animation: shimmer 1.4s infinite;
+    }
+
+    /* Type badge */
+    .type-badge {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 3px 7px;
+      border: 1px solid rgba(0,0,0,.35);
+      text-transform: uppercase;
+      color: #fff;
+      text-shadow: 1px 1px 0 rgba(0,0,0,.6);
+      display: inline-block;
+      letter-spacing: .3px;
+    }
+
+    /* Tab button */
+    .tab-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 7px 10px;
+      border: none;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: background .15s, color .15s;
+      flex: 1;
+    }
+
+    /* Scan line overlay */
+    .scan-line {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 60px;
+      background: linear-gradient(transparent, rgba(255,255,255,.025), transparent);
+      pointer-events: none;
+      z-index: 9999;
+      animation: scanH 8s linear infinite;
+    }
+
+    /* Form elements */
+    input, select { font-family: 'Press Start 2P', monospace; outline: none; }
+
+    /* Modal overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 12px;
+    }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (max-width: 640px) {
+      .grid-main       { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important; }
+      .modal-box        { width: 96vw !important; max-height: 90vh !important; }
+      .modal-info-row   { flex-direction: column !important; }
+      .evo-chain        { flex-wrap: wrap !important; }
+      h1.logo-title     { font-size: 11px !important; }
+    }
+    @media (max-width: 420px) {
+      .grid-main { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="scan-line"></div>
+
+  <!-- React & Babel via CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+    /* ============================================================
+       CONSTANTS
+    ============================================================ */
+    const API      = "https://pokeapi.co/api/v2";
+    const PAGE     = 20;
+
+    // Type → background color mapping
+    const TYPE_C = {
+      normal:   "#9FA19F", fire:     "#E62829", water:    "#2980EF",
+      electric: "#FAC000", grass:    "#3FA129", ice:      "#3DCEF3",
+      fighting: "#FF8000", poison:   "#9141CB", ground:   "#915121",
+      flying:   "#81B9EF", psychic:  "#EF4179", bug:      "#91A119",
+      rock:     "#AFA981", ghost:    "#704170", dragon:   "#5060E1",
+      dark:     "#624D4E", steel:    "#60A1B8", fairy:    "#EF70EF",
+    };
+
+    // Stat bar colors
+    const STAT_C = {
+      hp:               "#FF5959",
+      attack:           "#F5AC78",
+      defense:          "#FAE078",
+      "special-attack": "#9DB7F5",
+      "special-defense":"#A7DB8D",
+      speed:            "#FA92B2",
+    };
+
+    // Stat max values (for bar width %)
+    const STAT_MAX = {
+      hp: 255, attack: 190, defense: 230,
+      "special-attack": 194, "special-defense": 230, speed: 180,
+    };
+
+    // Short stat labels
+    const STAT_L = {
+      hp: "HP", attack: "ATK", defense: "DEF",
+      "special-attack": "SpA", "special-defense": "SpD", speed: "SPD",
+    };
+
+    /* ============================================================
+       API HELPERS
+    ============================================================ */
+
+    // In-memory cache — avoids duplicate network requests
+    const apiCache = {};
+
+    async function apiFetch(url) {
+      if (apiCache[url]) return apiCache[url];
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Não encontrado");
+      const data = await res.json();
+      apiCache[url] = data;
+      return data;
+    }
+
+    // Recursively flatten the evolution chain into a flat array
+    function parseEvo(chain) {
+      const result = [];
+      let node = chain;
+      while (node) {
+        const id = parseInt(node.species.url.split("/").filter(Boolean).pop());
+        result.push({ name: node.species.name, id });
+        node = node.evolves_to?.[0] || null;
+      }
+      return result;
+    }
+
+    // Pick the best available sprite URL
+    function getImg(p) {
+      return (
+        p?.sprites?.other?.["official-artwork"]?.front_default ||
+        p?.sprites?.other?.dream_world?.front_default ||
+        p?.sprites?.front_default || ""
+      );
+    }
+
+    // Helpers
+    const fmtId  = (id) => `#${String(id).padStart(3, "0")}`;
+    const cap    = (s)  => s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ") : "";
+
+    /* ============================================================
+       LOCALSTORAGE — favorites persistence
+    ============================================================ */
+    function getFavs() {
+      try { return JSON.parse(localStorage.getItem("pkdx-favs") || "[]"); }
+      catch { return []; }
+    }
+    function saveFavs(f) {
+      try { localStorage.setItem("pkdx-favs", JSON.stringify(f)); }
+      catch { /* silently fail in restricted envs */ }
+    }
+
+    /* ============================================================
+       COMPONENT: TypeBadge
+    ============================================================ */
+    function TypeBadge({ type }) {
+      return (
+        <span className="type-badge" style={{ background: TYPE_C[type] || "#888" }}>
+          {type}
+        </span>
+      );
+    }
+
+    /* ============================================================
+       COMPONENT: StatBar — individual base stat row
+    ============================================================ */
+    function StatBar({ name, value }) {
+      const max  = STAT_MAX[name] || 255;
+      const pct  = Math.min((value / max) * 100, 100);
+      const col  = STAT_C[name] || "#aaa";
+
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+          <span style={{ fontSize: 7, color: "#666", width: 32, textAlign: "right", flexShrink: 0 }}>
+            {STAT_L[name] || name.slice(0, 3).toUpperCase()}
+          </span>
+          <span style={{ fontSize: 9, color: "#ccc", width: 26, flexShrink: 0, textAlign: "right" }}>
+            {value}
+          </span>
+          <div style={{ flex: 1, background: "#1a1a2e", height: 10, border: "2px solid #000", overflow: "hidden" }}>
+            <div style={{
+              width: `${pct}%`, height: "100%",
+              background: col, transition: "width 1s ease",
+              boxShadow: `0 0 4px ${col}`,
+            }}/>
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       COMPONENT: SkeletonCard — loading placeholder
+    ============================================================ */
+    function SkeletonCard() {
+      return (
+        <div style={{ background: "#12121e", border: "3px solid #1e1e30", padding: 14, textAlign: "center" }}>
+          <div className="skeleton" style={{ width: 72, height: 72, margin: "0 auto 10px", borderRadius: 2 }}/>
+          <div className="skeleton" style={{ height: 8, width: "55%", margin: "0 auto 8px", borderRadius: 2 }}/>
+          <div className="skeleton" style={{ height: 7, width: "38%", margin: "0 auto", borderRadius: 2 }}/>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       COMPONENT: PkCard — Pokémon grid card
+    ============================================================ */
+    function PkCard({ pokemon, onSelect, isFav, onFav }) {
+      const img = getImg(pokemon);
+      const mt  = pokemon.types?.[0]?.type?.name;
+      const tc  = TYPE_C[mt] || "#888";
+
+      return (
+        <div
+          className="pcard card-enter"
+          style={{
+            background: `linear-gradient(145deg, #13132099 0%, #0a0a14ee 100%)`,
+            border:     `3px solid ${tc}`,
+            boxShadow:  "3px 3px 0 #000",
+            padding:    "10px 10px 8px",
+            textAlign:  "center",
+          }}
+          onClick={() => onSelect(pokemon)}
+        >
+          {/* Favorite toggle */}
+          <button
+            onClick={e => { e.stopPropagation(); onFav(pokemon.id); }}
+            title={isFav ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+            style={{
+              position: "absolute", top: 5, right: 6,
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: 13, filter: isFav ? "none" : "grayscale(1) opacity(.35)",
+              lineHeight: 1,
+            }}
+          >★</button>
+
+          {/* Pokémon ID */}
+          <div style={{ fontSize: 7, color: "#444", marginBottom: 3 }}>{fmtId(pokemon.id)}</div>
+
+          {/* Sprite */}
+          <div style={{
+            width: 72, height: 72, margin: "0 auto 7px",
+            background: `radial-gradient(circle, ${tc}25 0%, transparent 70%)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <img
+              className="pimg"
+              src={img}
+              alt={pokemon.name}
+              style={{ width: 64, height: 64, imageRendering: "pixelated", objectFit: "contain" }}
+              loading="lazy"
+            />
+          </div>
+
+          {/* Name */}
+          <div style={{
+            fontSize: 8, color: "#e0e0e0", marginBottom: 7,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            letterSpacing: .3,
+          }}>
+            {cap(pokemon.name)}
+          </div>
+
+          {/* Type badges */}
+          <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" }}>
+            {pokemon.types.map(t => <TypeBadge key={t.type.name} type={t.type.name}/>)}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       COMPONENT: EvoChain — evolution chain display
+    ============================================================ */
+    function EvoChain({ chain, curId, onNav }) {
+      if (!chain || chain.length < 2) {
+        return (
+          <div style={{ textAlign: "center", padding: 20, fontSize: 8, color: "#444" }}>
+            Sem evoluções disponíveis
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <div style={{ fontSize: 8, color: "#CC0000", marginBottom: 14, letterSpacing: 1 }}>
+            CADEIA DE EVOLUÇÃO
+          </div>
+          <div
+            className="evo-chain"
+            style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}
+          >
+            {chain.map((evo, i) => (
+              <div key={evo.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {i > 0 && (
+                  <span style={{ color: "#CC0000", fontSize: 14, fontFamily: "sans-serif" }}>→</span>
+                )}
+                <div
+                  onClick={() => onNav(evo.id)}
+                  title={`Ver ${cap(evo.name)}`}
+                  style={{
+                    textAlign: "center", cursor: "pointer",
+                    padding: "8px 10px", minWidth: 70,
+                    border:     `2px solid ${evo.id === curId ? "#CC0000" : "#2a2a3e"}`,
+                    background: evo.id === curId ? "#1a0000" : "#0d0d1a",
+                    transition: "border .2s, background .2s",
+                  }}
+                >
+                  <img
+                    src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${evo.id}.png`}
+                    alt={evo.name}
+                    style={{ width: 48, height: 48, imageRendering: "pixelated", display: "block", margin: "0 auto" }}
+                  />
+                  <div style={{ fontSize: 7, color: evo.id === curId ? "#FF6666" : "#888", marginTop: 4 }}>
+                    {cap(evo.name)}
+                  </div>
+                  <div style={{ fontSize: 6, color: "#444", marginTop: 2 }}>{fmtId(evo.id)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       COMPONENT: Modal — Pokémon detail view
+    ============================================================ */
+    function Modal({ pkId, onClose, onNav, favs, onFav }) {
+      const [pk,      setPk]      = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [err,     setErr]     = useState(null);
+      const [evo,     setEvo]     = useState([]);
+      const [tab,     setTab]     = useState("stats");
+
+      // Fetch Pokémon data + evolution chain on pkId change
+      useEffect(() => {
+        if (!pkId) return;
+        setLoading(true); setErr(null); setPk(null); setEvo([]); setTab("stats");
+
+        (async () => {
+          try {
+            // 1. Fetch base Pokémon data
+            const p = await apiFetch(`${API}/pokemon/${pkId}`);
+            setPk(p);
+
+            // 2. Fetch species (needed for evolution chain URL)
+            const sp = await apiFetch(`${API}/pokemon-species/${p.id}`);
+
+            // 3. Fetch and parse evolution chain
+            if (sp.evolution_chain?.url) {
+              const ec = await apiFetch(sp.evolution_chain.url);
+              setEvo(parseEvo(ec.chain));
+            }
+          } catch (e) {
+            setErr(e.message);
+          } finally {
+            setLoading(false);
+          }
+        })();
+      }, [pkId]);
+
+      // Close on Escape key
+      useEffect(() => {
+        const handler = e => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+      }, []);
+
+      const isFav = favs.includes(pkId);
+      const img   = getImg(pk);
+      const mt    = pk?.types?.[0]?.type?.name;
+      const tc    = TYPE_C[mt] || "#CC0000";
+      const tabs  = ["stats", "movimentos", "evolução"];
+
+      return (
+        <div
+          className="modal-overlay"
+          onClick={e => e.target === e.currentTarget && onClose()}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Detalhes do Pokémon"
+        >
+          <div
+            className="modal-enter modal-box"
+            style={{
+              background:  "#0d0d18",
+              border:      `4px solid ${tc}`,
+              boxShadow:   `0 0 24px ${tc}44, 8px 8px 0 #000`,
+              width:       "100%",
+              maxWidth:    520,
+              maxHeight:   "86vh",
+              overflow:    "hidden",
+              display:     "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* ── Modal Header ── */}
+            <div style={{
+              background:     tc,
+              padding:        "9px 12px",
+              display:        "flex",
+              alignItems:     "center",
+              justifyContent: "space-between",
+              flexShrink:     0,
+              borderBottom:   "3px solid #000",
+            }}>
+              <span style={{ fontSize: 9, color: "#fff", textShadow: "1px 1px 0 #000", letterSpacing: .5 }}>
+                {loading ? "..." : fmtId(pk?.id)} {loading ? "" : cap(pk?.name)}
+              </span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button
+                  onClick={() => !loading && onFav(pkId)}
+                  title={isFav ? "Remover dos favoritos" : "Favoritar"}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, filter: isFav ? "none" : "grayscale(1) opacity(.4)", lineHeight: 1 }}
+                >★</button>
+                <button
+                  className="btn"
+                  onClick={onClose}
+                  aria-label="Fechar"
+                  style={{ background: "#000", color: "#fff", padding: "4px 8px", fontSize: 8, border: "2px solid #fff4", boxShadow: "2px 2px 0 #000" }}
+                >✕</button>
+              </div>
+            </div>
+
+            {/* ── Modal Body ── */}
+            <div style={{ overflow: "auto", flex: 1, padding: 14 }}>
+
+              {/* Loading spinner */}
+              {loading && (
+                <div style={{ textAlign: "center", padding: 40 }}>
+                  <div style={{
+                    width: 36, height: 36,
+                    border: "4px solid #222", borderTopColor: "#CC0000",
+                    borderRadius: "50%", animation: "spin .7s linear infinite",
+                    margin: "0 auto 14px",
+                  }}/>
+                  <div style={{ fontSize: 7, color: "#444" }}>CARREGANDO...</div>
+                </div>
+              )}
+
+              {/* Error state */}
+              {err && (
+                <div style={{ textAlign: "center", padding: 40, color: "#FF5959", fontSize: 8 }}>
+                  ⚠ {err}
+                </div>
+              )}
+
+              {/* Pokémon data */}
+              {pk && (
+                <>
+                  {/* Top info row: image + basic stats */}
+                  <div
+                    className="modal-info-row"
+                    style={{ display: "flex", gap: 14, marginBottom: 14, flexWrap: "wrap" }}
+                  >
+                    {/* Official artwork */}
+                    <div style={{
+                      background: `radial-gradient(circle, ${tc}28 0%, #090912 70%)`,
+                      border:     `2px solid ${tc}33`,
+                      padding:    10, flexShrink: 0, textAlign: "center",
+                      minWidth: 130, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <img
+                        src={img}
+                        alt={pk.name}
+                        style={{ width: 110, height: 110, imageRendering: "pixelated", objectFit: "contain" }}
+                      />
+                    </div>
+
+                    {/* Types / Height / Weight / Abilities */}
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      {/* Types */}
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+                        {pk.types.map(t => <TypeBadge key={t.type.name} type={t.type.name}/>)}
+                      </div>
+
+                      {/* Height & Weight */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 10 }}>
+                        {[
+                          { l: "ALTURA", v: `${(pk.height / 10).toFixed(1)}m` },
+                          { l: "PESO",   v: `${(pk.weight / 10).toFixed(1)}kg` },
+                        ].map(({ l, v }) => (
+                          <div key={l} style={{ background: "#111120", border: "2px solid #222", padding: "7px 8px" }}>
+                            <div style={{ fontSize: 6, color: "#444", marginBottom: 4 }}>{l}</div>
+                            <div style={{ fontSize: 9, color: "#ccc" }}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Abilities */}
+                      <div style={{ fontSize: 7, color: "#555", marginBottom: 6 }}>HABILIDADES</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {pk.abilities.map(a => (
+                          <span
+                            key={a.ability.name}
+                            title={a.is_hidden ? "Habilidade oculta" : ""}
+                            style={{
+                              fontSize: 6, padding: "3px 5px",
+                              background: "#111120",
+                              border: `1px solid ${a.is_hidden ? "#FAC00055" : "#222"}`,
+                              color: a.is_hidden ? "#FAC000" : "#888",
+                            }}
+                          >
+                            {cap(a.ability.name)}{a.is_hidden ? " ✦" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tabs */}
+                  <div style={{ display: "flex", borderBottom: "2px solid #222", marginBottom: 12 }}>
+                    {tabs.map(t => (
+                      <button
+                        key={t}
+                        className="tab-btn"
+                        onClick={() => setTab(t)}
+                        style={{
+                          background:    tab === t ? tc : "#0d0d18",
+                          color:         tab === t ? "#fff" : "#555",
+                          borderBottom:  tab === t ? `2px solid ${tc}` : "2px solid transparent",
+                          marginBottom:  -2,
+                        }}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ── Tab: Stats ── */}
+                  {tab === "stats" && (
+                    <div>
+                      {pk.stats.map(s => (
+                        <StatBar key={s.stat.name} name={s.stat.name} value={s.base_stat}/>
+                      ))}
+                      <div style={{ fontSize: 7, color: "#555", textAlign: "right", marginTop: 6 }}>
+                        TOTAL: <span style={{ color: "#fff" }}>
+                          {pk.stats.reduce((acc, s) => acc + s.base_stat, 0)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Tab: Moves ── */}
+                  {tab === "movimentos" && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 200, overflow: "auto", padding: "2px 0" }}>
+                      {pk.moves.slice(0, 40).map(m => (
+                        <span
+                          key={m.move.name}
+                          style={{
+                            fontSize: 6, background: "#111120",
+                            border: "1px solid #222", padding: "3px 6px",
+                            color: "#888", whiteSpace: "nowrap",
+                          }}
+                        >
+                          {cap(m.move.name)}
+                        </span>
+                      ))}
+                      {pk.moves.length > 40 && (
+                        <span style={{ fontSize: 6, color: "#444", padding: "3px 6px" }}>
+                          +{pk.moves.length - 40} mais...
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Tab: Evolution ── */}
+                  {tab === "evolução" && (
+                    <EvoChain chain={evo} curId={pk.id} onNav={id => onNav(id)}/>
+                  )}
+
+                  {/* Prev / Next navigation */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, gap: 8 }}>
+                    {pk.id > 1 && (
+                      <button
+                        className="btn"
+                        onClick={() => onNav(pk.id - 1)}
+                        style={{
+                          background: "#111", color: "#777",
+                          padding: "6px 9px", fontSize: 7,
+                          border: "2px solid #333", boxShadow: "2px 2px 0 #000",
+                          letterSpacing: .3,
+                        }}
+                      >
+                        ← {fmtId(pk.id - 1)}
+                      </button>
+                    )}
+                    <button
+                      className="btn"
+                      onClick={() => onNav(pk.id + 1)}
+                      style={{
+                        background: "#111", color: "#777",
+                        padding: "6px 9px", fontSize: 7,
+                        border: "2px solid #333", boxShadow: "2px 2px 0 #000",
+                        marginLeft: "auto", letterSpacing: .3,
+                      }}
+                    >
+                      {fmtId(pk.id + 1)} →
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       COMPONENT: App — main application
+    ============================================================ */
+    function App() {
+      // Pokémon list state
+      const [list,    setList]    = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [offset,  setOffset]  = useState(0);
+      const [hasMore, setHasMore] = useState(true);
+
+      // Search state
+      const [search,    setSearch]    = useState("");
+      const [srResult,  setSrResult]  = useState(null);
+      const [srErr,     setSrErr]     = useState(null);
+      const [searching, setSearching] = useState(false);
+
+      // UI state
+      const [selId, setSelId] = useState(null);
+      const [view,  setView]  = useState("all");     // "all" | "favorites"
+      const [typeF, setTypeF] = useState("");         // type filter
+      const [dark,  setDark]  = useState(true);       // dark / light mode
+
+      // Favorites — persisted to LocalStorage
+      const [favs, setFavs] = useState(getFavs);
+
+      /* ── Load a page of Pokémons ── */
+      const loadMore = useCallback(async (off) => {
+        setLoading(true);
+        try {
+          // Fetch list (names + urls only)
+          const listData = await apiFetch(`${API}/pokemon?limit=${PAGE}&offset=${off}`);
+          if (!listData.next) setHasMore(false);
+
+          // Fetch full data for each Pokémon in parallel
+          const details = await Promise.all(listData.results.map(p => apiFetch(p.url)));
+          setList(prev => [...prev, ...details]);
+          setOffset(off + PAGE);
+        } catch (e) {
+          console.error("loadMore error:", e);
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      // Initial load
+      useEffect(() => { loadMore(0); }, []);
+
+      // Save favs whenever they change
+      useEffect(() => { saveFavs(favs); }, [favs]);
+
+      /* ── When switching to favorites view, fetch any that aren't loaded yet ── */
+      useEffect(() => {
+        if (view !== "favorites") return;
+        const missing = favs.filter(id => !list.find(p => p.id === id));
+        if (!missing.length) return;
+        Promise.all(missing.map(id => apiFetch(`${API}/pokemon/${id}`))).then(results => {
+          setList(prev => {
+            const ids = prev.map(p => p.id);
+            return [...prev, ...results.filter(r => !ids.includes(r.id))];
+          });
+        }).catch(() => {});
+      }, [view, favs]);
+
+      /* ── Toggle favorite ── */
+      const togFav = useCallback((id) => {
+        setFavs(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+      }, []);
+
+      /* ── Search by name or ID ── */
+      const doSearch = useCallback(async (q) => {
+        if (!q.trim()) { setSrResult(null); setSrErr(null); return; }
+        setSearching(true); setSrErr(null); setSrResult(null);
+        try {
+          const p = await apiFetch(`${API}/pokemon/${q.toLowerCase().trim()}`);
+          setSrResult([p]);
+        } catch {
+          setSrErr(`"${q}" não encontrado na Pokédex!`);
+        } finally {
+          setSearching(false);
+        }
+      }, []);
+
+      /* ── Derived list (search → favorites → type filter) ── */
+      const displayList = useMemo(() => {
+        if (srResult) return srResult;
+        let l = view === "favorites" ? list.filter(p => favs.includes(p.id)) : list;
+        if (typeF) l = l.filter(p => p.types.some(t => t.type.name === typeF));
+        return l;
+      }, [srResult, list, view, favs, typeF]);
+
+      /* ── Theme colors ── */
+      const bg      = dark ? "#0a0a0f" : "#f0e6d3";
+      const textCol = dark ? "#ccc"    : "#111";
+
+      return (
+        <div style={{ background: bg, minHeight: "100vh", color: textCol, transition: "background .3s" }}>
+
+          {/* ════════════════════ HEADER ════════════════════ */}
+          <header style={{
+            background:     "#CC0000",
+            borderBottom:   "4px solid #000",
+            padding:        "9px 14px",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "space-between",
+            position:       "sticky",
+            top:            0,
+            zIndex:         200,
+            boxShadow:      "0 4px 0 #000",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Mini Poké Ball */}
+              <div style={{
+                width: 26, height: 26, borderRadius: "50%",
+                background: "linear-gradient(180deg, #fff 50%, #333 50%)",
+                border: "3px solid #000", boxShadow: "2px 2px 0 #000",
+                position: "relative", flexShrink: 0,
+              }}>
+                <div style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 7, height: 7, borderRadius: "50%",
+                  background: "#fff", border: "1.5px solid #000",
+                }}/>
+              </div>
+              <h1
+                className="logo-title"
+                style={{ fontSize: 13, color: "#fff", textShadow: "2px 2px 0 #000", letterSpacing: 1 }}
+              >
+                POKÉDEX
+              </h1>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 6, color: "rgba(255,255,255,.6)" }}>{list.length} PKM</span>
+              <button
+                className="btn"
+                onClick={() => setDark(d => !d)}
+                title="Alternar modo claro/escuro"
+                style={{
+                  background:  dark ? "#1a1a1a" : "#FAC000",
+                  color:       dark ? "#FAC000" : "#000",
+                  padding:     "5px 7px", fontSize: 11,
+                  border:      "2px solid #000", boxShadow: "2px 2px 0 #000",
+                }}
+              >
+                {dark ? "☀" : "●"}
+              </button>
+            </div>
+          </header>
+
+          {/* ════════════════════ MAIN CONTENT ════════════════════ */}
+          <div style={{ maxWidth: 880, margin: "0 auto", padding: "14px 10px" }}>
+
+            {/* ── Search Bar ── */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{
+                display: "flex", gap: 6,
+                background: dark ? "#111120" : "#fff",
+                border: "3px solid #CC0000",
+                boxShadow: "4px 4px 0 #000",
+                padding: 7,
+              }}>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && doSearch(search)}
+                  placeholder="Nome ou número..."
+                  aria-label="Buscar Pokémon"
+                  style={{
+                    flex: 1, background: "transparent", border: "none",
+                    fontSize: 8, color: textCol, padding: "3px 6px", letterSpacing: .3,
+                  }}
+                />
+                {search && (
+                  <button
+                    onClick={() => { setSearch(""); setSrResult(null); setSrErr(null); }}
+                    aria-label="Limpar busca"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#555", fontSize: 13, padding: "0 4px" }}
+                  >✕</button>
+                )}
+                <button
+                  className="btn"
+                  onClick={() => doSearch(search)}
+                  style={{
+                    background: "#CC0000", color: "#fff",
+                    padding: "6px 9px", fontSize: 7,
+                    border: "2px solid #000", boxShadow: "2px 2px 0 #000",
+                  }}
+                >
+                  {searching ? "..." : "BUSCAR"}
+                </button>
+              </div>
+
+              {/* Search error */}
+              {srErr && (
+                <div style={{
+                  fontSize: 7, color: "#FF5959",
+                  background: dark ? "#1a0000" : "#fff0f0",
+                  border: "2px solid #FF5959",
+                  padding: "7px 10px", marginTop: 6,
+                }}>
+                  ⚠ {srErr}
+                </div>
+              )}
+            </div>
+
+            {/* ── Filter Bar ── */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+
+              {/* View toggle buttons */}
+              {[
+                ["all",       "TODOS",    list.length],
+                ["favorites", "★ FAVS",  favs.length],
+              ].map(([v, label, cnt]) => (
+                <button
+                  key={v}
+                  className="btn"
+                  onClick={() => { setView(v); setSrResult(null); setSearch(""); setSrErr(null); }}
+                  style={{
+                    background: view === v ? (v === "favorites" ? "#FAC000" : "#CC0000") : (dark ? "#111120" : "#fff"),
+                    color:      view === v ? (v === "favorites" ? "#000" : "#fff")       : (dark ? "#555" : "#888"),
+                    padding:    "6px 9px", fontSize: 7,
+                    border:     `2px solid ${view === v ? "#000" : (dark ? "#333" : "#ddd")}`,
+                    boxShadow:  view === v ? "2px 2px 0 #000" : "none",
+                  }}
+                >
+                  {label} ({cnt})
+                </button>
+              ))}
+
+              {/* Type filter dropdown */}
+              <select
+                value={typeF}
+                onChange={e => setTypeF(e.target.value)}
+                aria-label="Filtrar por tipo"
+                style={{
+                  background: dark ? "#111120" : "#fff",
+                  color:      textCol,
+                  border:     `2px solid ${dark ? "#333" : "#ddd"}`,
+                  padding:    "6px 7px", fontSize: 7, cursor: "pointer",
+                }}
+              >
+                <option value="">TIPO: TODOS</option>
+                {Object.keys(TYPE_C).map(t => (
+                  <option key={t} value={t}>{t.toUpperCase()}</option>
+                ))}
+              </select>
+
+              {/* Clear filters button */}
+              {(typeF || srResult) && (
+                <button
+                  className="btn"
+                  onClick={() => { setTypeF(""); setSrResult(null); setSearch(""); setSrErr(null); }}
+                  style={{
+                    background: dark ? "#111120" : "#fff",
+                    color: "#CC0000", padding: "5px 7px", fontSize: 7,
+                    border: "2px solid #CC0000", boxShadow: "none",
+                  }}
+                >
+                  ✕ LIMPAR
+                </button>
+              )}
+            </div>
+
+            {/* ── Empty: Favorites ── */}
+            {displayList.length === 0 && !loading && view === "favorites" && (
+              <div style={{ textAlign: "center", padding: 60 }}>
+                <div style={{ fontSize: 28, marginBottom: 16, animation: "blink 2s infinite" }}>★</div>
+                <div style={{ fontSize: 8, color: "#444", marginBottom: 10 }}>
+                  Nenhum favorito ainda!
+                </div>
+                <div style={{ fontSize: 6, color: "#333" }}>
+                  Clique em ★ nos cards para favoritar
+                </div>
+              </div>
+            )}
+
+            {/* ── Pokémon Grid ── */}
+            <div
+              className="grid-main"
+              role="list"
+              aria-label="Lista de Pokémons"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                gap: 10,
+                marginBottom: 14,
+              }}
+            >
+              {displayList.map(p => (
+                <PkCard
+                  key={p.id}
+                  pokemon={p}
+                  onSelect={pk => setSelId(pk.id)}
+                  isFav={favs.includes(p.id)}
+                  onFav={togFav}
+                />
+              ))}
+
+              {/* Skeleton loaders while fetching */}
+              {loading && Array.from({ length: PAGE }).map((_, i) => (
+                <SkeletonCard key={`sk${i}`}/>
+              ))}
+            </div>
+
+            {/* ── Load More button ── */}
+            {!srResult && view === "all" && !typeF && hasMore && !loading && (
+              <div style={{ textAlign: "center", marginBottom: 28 }}>
+                <button
+                  className="btn"
+                  onClick={() => loadMore(offset)}
+                  style={{
+                    background:    "#CC0000",
+                    color:         "#fff",
+                    padding:       "11px 22px",
+                    fontSize:      9,
+                    border:        "3px solid #000",
+                    boxShadow:     "4px 4px 0 #000",
+                    letterSpacing: 2,
+                  }}
+                >
+                  CARREGAR MAIS
+                </button>
+                <div style={{ fontSize: 6, color: "#333", marginTop: 8 }}>
+                  {list.length} Pokémons carregados
+                </div>
+              </div>
+            )}
+
+            {/* Loading indicator (when fetching more) */}
+            {loading && list.length > 0 && (
+              <div style={{ textAlign: "center", padding: 16 }}>
+                <div style={{
+                  width: 28, height: 28,
+                  border: "3px solid #222", borderTopColor: "#CC0000",
+                  borderRadius: "50%", animation: "spin .7s linear infinite",
+                  margin: "0 auto",
+                }}/>
+              </div>
+            )}
+          </div>
+
+          {/* ════════════════════ FOOTER ════════════════════ */}
+          <footer style={{
+            background:   "#CC0000",
+            borderTop:    "3px solid #000",
+            padding:      "9px",
+            textAlign:    "center",
+            fontSize:     5,
+            color:        "rgba(255,255,255,.6)",
+            letterSpacing: .5,
+          }}>
+            POKÉDEX © 2024 · DADOS: POKÉAPI.CO · NÃO OFICIAL
+          </footer>
+
+          {/* ════════════════════ DETAIL MODAL ════════════════════ */}
+          {selId && (
+            <Modal
+              pkId={selId}
+              onClose={() => setSelId(null)}
+              onNav={id => setSelId(id)}
+              favs={favs}
+              onFav={togFav}
+            />
+          )}
+        </div>
+      );
+    }
+
+    /* ============================================================
+       BOOTSTRAP
+    ============================================================ */
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
